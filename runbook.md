@@ -751,6 +751,30 @@ sudo find /var/cache/nginx/micro -type f -delete      # ล้าง micro-cache
 กู้คืน: `sudo cp /root/a1-backup-20261028/block-user-enum.php /var/www/freexduk/wp-content/mu-plugins/`
 หมายเหตุ: `/news/` ได้ 404 อยู่ก่อนแล้ว (ไม่มีหน้า news ใน WordPress — ไม่เกี่ยวกับการแก้นี้)
 
+### 2.5 ปิดจุดอ่อนจากการตรวจความปลอดภัย ระยะ B (28 ต.ค.)
+สำรองก่อนแก้ทั้งหมดที่ `/root/phaseB-backup-20261028/` (wp-db.sql.gz · plugins-themes.tar.gz · front vhost · wp-origin · wordpress-common.conf · duckdns-update.sh)
+```bash
+B=/root/phaseB-backup-20261028; sudo install -d -m 700 $B
+cd /var/www/freexduk && sudo -u www-data wp db export - | gzip | sudo tee $B/wp-db.sql.gz >/dev/null
+sudo tar -czf $B/plugins-themes.tar.gz -C /var/www/freexduk/wp-content plugins themes mu-plugins
+```
+| # | แก้อะไร | คำสั่ง / ไฟล์ | ผล |
+|---|---|---|---|
+| B1 | อัปเดตปลั๊กอิน | `wp plugin update contact-form-7 ewww-image-optimizer` | CF7 6.2.1 → 6.2.3 · EWWW 8.8.0 → 8.9.0 · CF7 REST ตอบ `validation_failed` (ทำงานปกติ) |
+| B3 | ลบของที่ไม่ใช้ | `wp plugin delete akismet hello` · `wp theme delete twentytwentythree twentytwentyfour` | เหลือธีม kadence (ใช้) + twentytwentyfive (สำรอง) |
+| B4 | ซ่อนเลขเวอร์ชัน | `snippets/wordpress-common.conf`: readme.html / license.txt → 404 · mu-plugin `hide-wp-version.php` | 404 ทั้งสองไฟล์ · `generator` ในหน้าเว็บและ feed: 0 |
+| B5 | header เพิ่ม (หน้าบ้าน ระดับ server) | `Permissions-Policy` + `Content-Security-Policy-Report-Only` (มี `worker-src 'self' blob:` สำหรับภาพเคลื่อนไหวหน้าแรก) | เปิด 5 หน้าในเบราว์เซอร์: ไม่มี CSP violation ไม่มี console error |
+| B6 | ซ่อน token DuckDNS จาก `ps` | `/usr/local/bin/duckdns-update.sh`: ส่ง URL ให้ `curl -K -` ทาง stdin | DuckDNS ตอบ `OK` · ไม่มี token ใน argument ของคำสั่งใด |
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+sudo -u www-data wp cache-enabler clear && sudo find /var/cache/nginx/micro -type f -delete
+```
+**ตรวจรอบสุดท้าย:** ✅ บริการครบ · `/` `/curriculum/` `/admission/` `/coop/` `/contact/` `/wp-login.php` → 200 · Dashboard 401 · xmlrpc 403 · readme 404 · `?author=1` → หน้าแรก · `wp cron test` Success
+หมายเหตุ: หน้า `/contact/` ที่ทีมออกแบบใหม่ไม่ได้ใส่ฟอร์ม CF7 (shortcode เหลือเฉพาะใน revision เก่า) — ไม่เกี่ยวกับการอัปเดต
+**ยังไม่ทำ:** B2 ลดสิทธิ์ administrator (8 บัญชี) — รอทีมตกลงว่าใครคงเป็น admin · เปลี่ยน CSP จาก Report-Only เป็นบังคับใช้ หลังดูผล 1–2 วัน
+กู้คืน: config ใน `$B/` copy กลับแล้ว `nginx -t && systemctl reload nginx` · ปลั๊กอิน/ธีม: แตก `plugins-themes.tar.gz` กลับ · DB: `gunzip -c $B/wp-db.sql.gz | sudo -u www-data wp db import -`
+
 ---
 
 ## บันทึกปัญหาที่เจอ

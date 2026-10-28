@@ -87,6 +87,20 @@ PHP
 chown www-data:www-data "$WP_ROOT/wp-content/mu-plugins/disable-xmlrpc.php"
 ok "ปิด XML-RPC แล้ว"
 
+# ----- ซ่อนเลขเวอร์ชัน WordPress (คู่กับ nginx ที่ตอบ 404 ให้ readme.html / license.txt) -----
+cat >"$WP_ROOT/wp-content/mu-plugins/hide-wp-version.php" <<'PHP'
+<?php
+/**
+ * Plugin Name: Hide WordPress version
+ * Description: เอาเลขเวอร์ชัน WordPress ออกจาก <meta name="generator"> และ RSS feed
+ *              (คนสแกนใช้เลขเวอร์ชันเทียบหาช่องโหว่ที่รู้จัก)
+ */
+remove_action( 'wp_head', 'wp_generator' );
+add_filter( 'the_generator', '__return_empty_string' );
+PHP
+chown www-data:www-data "$WP_ROOT/wp-content/mu-plugins/hide-wp-version.php"
+ok "ซ่อนเลขเวอร์ชัน WordPress แล้ว"
+
 # ----- กันการสืบรายชื่อ user — เฉพาะคนที่ไม่ได้ login -----
 # (เดิมบล็อกที่ nginx แต่ nginx แยกไม่ออกว่าใคร login → block editor ของทีมเรียก /users/me ไม่ได้)
 cat >"$WP_ROOT/wp-content/mu-plugins/block-user-enum.php" <<'PHP'
