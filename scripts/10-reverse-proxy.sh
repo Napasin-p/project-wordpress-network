@@ -170,6 +170,9 @@ server {
     # add_header ระดับ server เท่านั้น (ถ้าใส่ใน location ค่าระดับ server จะไม่ถูกส่ง)
     add_header Strict-Transport-Security "max-age=31536000" always;
     add_header X-Cache-Status \$upstream_cache_status always;   # HIT / MISS / BYPASS — ใช้พิสูจน์ว่า cache ทำงาน
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+    # CSP แบบ Report-Only: แจ้งเตือนใน console เท่านั้น ยังไม่บล็อก — ดูผล 1-2 วันก่อนเปลี่ยนเป็น Content-Security-Policy
+    add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://www.google.com https://docs.google.com; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" always;
 
     client_max_body_size 32m;
     limit_conn conn 50;

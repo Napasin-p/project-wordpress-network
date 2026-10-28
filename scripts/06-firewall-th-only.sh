@@ -59,14 +59,34 @@ write_refresh_script() {
 # สร้าง set ใหม่ให้เสร็จก่อนแล้วค่อย swap → ไม่มีช่วงที่ set ว่าง (ซึ่งจะบล็อกทุกคน)
 set -euo pipefail
 
+# ตรวจรายการก่อนโหลด — ถ้าแหล่งข้อมูลถูกแก้ (เช่น แอบใส่ 0.0.0.0/0) ให้คงรายการเดิมไว้
+# geo-block จะได้ไม่เปิดให้ทั้งโลกเข้าโดยไม่มีใครรู้
+# ผ่าน: พิมพ์จำนวนรายการ คืนค่า 0 · ผิดปกติ: พิมพ์เหตุผล คืนค่า 1
+validate() {   # \$1=ไฟล์  \$2=family  \$3=จำนวนเดิม (0 = ยังไม่มี set)  \$4=จำนวนขั้นต่ำ
+  local file=\$1 fam=\$2 old=\$3 min=\$4 count minpfx=8 wide special
+  [[ \$fam == inet6 ]] && minpfx=16
+  count=\$(grep -cE '^[0-9a-fA-F:.]+/[0-9]+' "\$file" || true)
+  wide=\$(awk -F/ -v m="\$minpfx" '/^[0-9a-fA-F:.]+\/[0-9]+/ && \$2+0 < m {printf "%s ", \$0}' "\$file")
+  # IP ภายใน / พิเศษ ที่ไม่มีทางอยู่ในรายการของประเทศไทย
+  special=\$(grep -ciE '^(0\.|10\.|127\.|169\.254\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|22[4-9]\.|2[3-5][0-9]\.|::/|::1/|f[cd][0-9a-f]{2}:|fe80:)' "\$file" || true)
+  if (( count < min ));               then echo "ได้แค่ \$count รายการ (< \$min)"; return 1; fi
+  if [[ -n \$wide ]];                 then echo "มีช่วงกว้างเกิน /\$minpfx: \$wide"; return 1; fi
+  if (( special > 0 ));               then echo "มี IP ภายใน/พิเศษ \$special รายการ"; return 1; fi
+  if (( old > 0 && count > old * 2 )); then echo "จำนวนพุ่งจาก \$old เป็น \$count"; return 1; fi
+  if (( old > 0 && count * 2 < old )); then echo "จำนวนหดจาก \$old เหลือ \$count"; return 1; fi
+  echo "\$count"
+}
+
+entries() { ipset list "\$1" -t 2>/dev/null | awk '/Number of entries/{print \$4}'; }
+
 load() {   # \$1=ชื่อ set  \$2=family  \$3=URL  \$4=จำนวนขั้นต่ำ
-  local set=\$1 fam=\$2 url=\$3 min=\$4 tmp count
+  local set=\$1 fam=\$2 url=\$3 min=\$4 tmp old res
   tmp=\$(mktemp)
   curl -fsSL --max-time 60 "\$url" -o "\$tmp"
-  count=\$(grep -cE '^[0-9a-fA-F:.]+/[0-9]+' "\$tmp" || true)
-  if (( count < min )); then
-    logger -t th-ipset "\$set: ได้แค่ \$count รายการ (< \$min) ไม่อัปเดต"
-    echo "\$set: ได้แค่ \$count รายการ ดูไม่ปกติ — ไม่อัปเดต" >&2
+  old=\$(entries "\$set"); old=\${old:-0}
+  if ! res=\$(validate "\$tmp" "\$fam" "\$old" "\$min"); then
+    logger -p auth.warning -t th-ipset "\$set: รายการผิดปกติ — \$res — คงรายการเดิม (\$old) ไม่อัปเดต"
+    echo "\$set: ผิดปกติ — \$res — ไม่อัปเดต" >&2
     rm -f "\$tmp"; return 1
   fi
   ipset -exist create "\$set" hash:net family "\$fam" maxelem 262144
@@ -76,9 +96,37 @@ load() {   # \$1=ชื่อ set  \$2=family  \$3=URL  \$4=จำนวนข�
   ipset swap "\$set-new" "\$set"
   ipset destroy "\$set-new"
   rm -f "\$tmp"
-  logger -t th-ipset "\$set: โหลด \$count รายการ"
-  echo "\$set: \$count รายการ"
+  logger -t th-ipset "\$set: โหลด \$res รายการ"
+  echo "\$set: \$res รายการ"
 }
+
+# --selftest: ทดสอบตัวตรวจด้วยข้อมูลปลอม — ไม่แตะ ipset/firewall จริง
+if [[ \${1:-} == --selftest ]]; then
+  t=\$(mktemp -d); trap 'rm -rf "\$t"' EXIT
+  curl -fsSL --max-time 60 "${TH_V4_URL}" -o "\$t/ok4"
+  curl -fsSL --max-time 60 "${TH_V6_URL}" -o "\$t/ok6"
+  cur4=\$(entries ${SET_TH}); cur4=\${cur4:-0}; cur6=\$(entries ${SET_TH6}); cur6=\${cur6:-0}
+  n4=\$(grep -cE '^[0-9a-fA-F:.]+/[0-9]+' "\$t/ok4")
+  { cat "\$t/ok4"; echo 0.0.0.0/0; }   > "\$t/wide4"
+  { cat "\$t/ok6"; echo ::/0; }        > "\$t/wide6"
+  { cat "\$t/ok4"; echo 10.0.0.0/8; }  > "\$t/private"
+  cat "\$t/ok4" "\$t/ok4" "\$t/ok4"    > "\$t/grow"
+  head -n \$(( n4 / 3 )) "\$t/ok4"      > "\$t/shrink"
+  fail=0
+  check() {   # ชื่อ ไฟล์ family จำนวนเดิม ขั้นต่ำ ผลที่ต้องได้
+    local got
+    if validate "\$t/\$2" "\$3" "\$4" "\$5" >/dev/null; then got=ผ่าน; else got=ปฏิเสธ; fi
+    if [[ \$got == "\$6" ]]; then echo "PASS  \$1 → \$got"; else echo "FAIL  \$1 → \$got (ต้อง \$6)"; fail=1; fi
+  }
+  check "รายการจริง IPv4"          ok4     inet  "\$cur4" 100 ผ่าน
+  check "รายการจริง IPv6"          ok6     inet6 "\$cur6" 10  ผ่าน
+  check "แอบใส่ 0.0.0.0/0"          wide4   inet  "\$cur4" 100 ปฏิเสธ
+  check "แอบใส่ ::/0"               wide6   inet6 "\$cur6" 10  ปฏิเสธ
+  check "แอบใส่ IP ภายใน 10.0.0.0/8" private inet  "\$cur4" 100 ปฏิเสธ
+  check "จำนวนพุ่ง 3 เท่า"          grow    inet  "\$cur4" 100 ปฏิเสธ
+  check "จำนวนหดเหลือ 1/3"         shrink  inet  "\$cur4" 100 ปฏิเสธ
+  exit \$fail
+fi
 
 load ${SET_TH}  inet  "${TH_V4_URL}" 100
 load ${SET_TH6} inet6 "${TH_V6_URL}" 10

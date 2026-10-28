@@ -169,6 +169,10 @@ location = /wp-config.php { deny all; }
 # ปิด xmlrpc.php — ถูกใช้ brute-force และ DDoS บ่อยที่สุดใน WordPress
 location = /xmlrpc.php { deny all; access_log off; log_not_found off; }
 
+# ซ่อนไฟล์ที่บอกเลขเวอร์ชัน WordPress (คนสแกนใช้เทียบหาช่องโหว่)
+location = /readme.html { return 404; }
+location = /license.txt { return 404; }
+
 # ห้ามรัน PHP ในโฟลเดอร์ uploads
 # (กันกรณีคนแนบ shell.php ปลอมเป็นรูปแล้วเรียกใช้)
 location ~* ^/wp-content/uploads/.*\.(php|phtml|phar)\$ { deny all; }

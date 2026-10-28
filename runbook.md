@@ -775,6 +775,27 @@ sudo -u www-data wp cache-enabler clear && sudo find /var/cache/nginx/micro -typ
 **ยังไม่ทำ:** B2 ลดสิทธิ์ administrator (8 บัญชี) — รอทีมตกลงว่าใครคงเป็น admin · เปลี่ยน CSP จาก Report-Only เป็นบังคับใช้ หลังดูผล 1–2 วัน
 กู้คืน: config ใน `$B/` copy กลับแล้ว `nginx -t && systemctl reload nginx` · ปลั๊กอิน/ธีม: แตก `plugins-themes.tar.gz` กลับ · DB: `gunzip -c $B/wp-db.sql.gz | sudo -u www-data wp db import -`
 
+### 2.6 ระยะ C1: ตัวตรวจในสคริปต์อัปเดตรายชื่อ IP ไทย (28 ต.ค.) ⚠️ แตะ firewall — ได้รับอนุญาตแล้ว
+**ปัญหาเดิม:** `/usr/local/sbin/th-ipset-refresh.sh` (cron อาทิตย์ 04:30) เช็คแค่จำนวนขั้นต่ำ — ถ้า ipdeny ถูกแก้ให้มี `0.0.0.0/0` geo-block จะเปิดทั้งโลกโดยไม่รู้ตัว
+**แก้:** เพิ่ม `validate()` — ปฏิเสธทั้งชุดและ**คงรายการเดิม**ถ้า: ช่วงกว้างกว่า /8 (v4) หรือ /16 (v6) · มี IP ภายใน/พิเศษ (0.x 10.x 127.x 169.254.x 172.16–31.x 192.168.x 224+ ::/0 ::1 fc00::/7 fe80::) · จำนวนเพิ่มเกิน 2 เท่าหรือหดเกินครึ่ง
+บันทึกเตือนที่ `journalctl -t th-ipset` (priority warning) · เพิ่มโหมด `--selftest` ที่ไม่แตะ ipset · สร้างจาก `scripts/06-firewall-th-only.sh` (write_refresh_script)
+**กฎ iptables ไม่เปลี่ยน** (แก้เฉพาะตัวตรวจก่อนโหลดรายการ)
+```bash
+B=/root/c1-backup-20261028; sudo install -d -m 700 $B
+sudo cp -a /usr/local/sbin/th-ipset-refresh.sh $B/ && sudo cp -a /etc/iptables/ipsets $B/ipsets.before
+sudo install -m 750 -o root -g root /tmp/th-new.sh /usr/local/sbin/th-ipset-refresh.sh
+sudo /usr/local/sbin/th-ipset-refresh.sh --selftest
+sudo /usr/local/sbin/th-ipset-refresh.sh
+```
+**ผลลัพธ์:** ✅
+```
+selftest 7/7 PASS: รายการจริง v4/v6 → ผ่าน · 0.0.0.0/0, ::/0, 10.0.0.0/8, พุ่ง 3 เท่า, หดเหลือ 1/3 → ปฏิเสธ
+รันจริง: th-net 667 · th-net6 221 (เท่าเดิม) · iptables-save (ไม่รวม counter) md5 ก่อน = หลัง · เว็บ 200
+```
+🐞 ระหว่างทดสอบ SSH ใหม่ค้าง: ต่อ SSH ถี่เกิน 10 ครั้ง/นาที → โดนกฎ SSHBRUTE ของเราเอง (ทำงานตามออกแบบ) ปลดเองเมื่อหยุดต่อ ~1 นาที
+กู้คืน: `sudo cp /root/c1-backup-20261028/th-ipset-refresh.sh /usr/local/sbin/`
+**C2 (sudo ต้องใส่รหัสผ่าน):** ตกลงทำตอนจบโปรเจกต์
+
 ---
 
 ## บันทึกปัญหาที่เจอ

@@ -38,8 +38,10 @@ set -euo pipefail
 source /etc/duckdns.env
 
 # เว้น ip= ว่าง = ให้ DuckDNS ใช้ IP ต้นทางของ request นี้เอง
-RESULT=$(curl -fsS --max-time 20 \
-  "https://www.duckdns.org/update?domains=${DUCKDNS_SUBDOMAIN}&token=${DUCKDNS_TOKEN}&ip=")
+# ส่ง URL ให้ curl ทาง stdin (-K -) ไม่ใส่เป็น argument — token จะไม่โผล่ใน ps / /proc/<pid>/cmdline
+# (printf เป็นคำสั่งในตัวของ bash จึงไม่สร้างโปรเซสใหม่ที่มี token)
+RESULT=$(printf 'url = "https://www.duckdns.org/update?domains=%s&token=%s&ip="\n' \
+  "$DUCKDNS_SUBDOMAIN" "$DUCKDNS_TOKEN" | curl -fsS --max-time 20 -K -)
 
 if [[ $RESULT == OK ]]; then
   logger -t duckdns "updated ${DUCKDNS_SUBDOMAIN}.duckdns.org -> OK"
