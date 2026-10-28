@@ -796,6 +796,39 @@ selftest 7/7 PASS: รายการจริง v4/v6 → ผ่าน · 0.0.
 กู้คืน: `sudo cp /root/c1-backup-20261028/th-ipset-refresh.sh /usr/local/sbin/`
 **C2 (sudo ต้องใส่รหัสผ่าน):** ตกลงทำตอนจบโปรเจกต์
 
+### 2.7 ลด admin + 2FA + CSP แบบ hash (28 ต.ค.)
+สำรองที่ `/root/phaseD-backup-20261028/` (wp-db.sql.gz · roles-before.csv · front vhost · 20-proxy.conf)
+
+**ลดสิทธิ์ administrator** (เจ้าของงานเลือก: เหลือ ID 1 คนเดียว)
+```bash
+for id in 2 3 4 5 6 7 8; do sudo -u www-data wp user set-role $id editor; done
+sudo -u www-data wp plugin install two-factor --activate      # 0.17.0 — ยังไม่บังคับ แต่ละคนเปิดเองในโปรไฟล์
+```
+ผล: administrator 1 · editor 7 — Editor เข้า "ปรับแต่ง (Customize)" ของธีมไม่ได้ ต้องให้ ID 1 ทำแทน
+
+**CSP แบบ hash** — `scripts/11-csp-strict.sh` (ติดตั้ง `/usr/local/sbin/csp-update-hashes.sh`)
+คำนวณ sha256 ของสคริปต์ inline ทุกตัวใน 12 หน้าสาธารณะ (หน้า/โพสต์ที่เผยแพร่ + หมวดหมู่ + ค้นหา + 404 ทั้งแบบ cache และสด)
+→ `/etc/nginx/conf.d/21-csp.conf` (map ตาม cookie login + path) · vhost หน้าบ้านส่ง `$csp_enforce` / `$csp_report`
+| ผู้เข้าชม | header |
+|---|---|
+| คนทั่วไป (หน้าสาธารณะ) | `Content-Security-Policy` แบบ hash 16 ตัว (บังคับใช้) |
+| คนที่ login / wp-admin / wp-login | นโยบายเดิมแบบ Report-Only (กัน block editor พัง) |
+| /security-dashboard/ | CSP ของ container เอง |
+```bash
+sudo ./11-csp-strict.sh             # โหมดทดสอบ: บังคับนโยบายเดิม + รายงานนโยบาย hash
+sudo ./11-csp-strict.sh --enforce   # บังคับใช้
+```
+**ผลลัพธ์:** ✅
+```
+โหมดทดสอบ รอบ 1: แจ้งเตือน "inline speculation rules" ทุกหน้า → เพิ่ม type speculationrules ในตัวคำนวณ hash (15 → 16 ตัว)
+โหมดทดสอบ รอบ 2: เปิด 10 หน้าในเบราว์เซอร์ → ไม่มีแจ้งเตือน CSP
+บังคับใช้: ไม่มีสคริปต์ถูกบล็อก · ไม่มี console error · ภาพเคลื่อนไหว (canvas) และเมนูทำงาน · ทุกหน้า 200
+ลองฝังสคริปต์ inline ใหม่ผ่าน DevTools → ไม่ถูกรัน (CSP บล็อก)
+```
+⚠️ **แก้สคริปต์ในหน้าเว็บเมื่อไหร่ ต้องรัน `sudo csp-update-hashes.sh --enforce`** ไม่งั้นสคริปต์ที่แก้จะถูกบล็อก · ห้ามตั้ง cron ให้รันเอง
+🐞 ทดสอบ header ทันทีหลัง `systemctl reload nginx` ได้ค่าเก่า — worker เดิมยังตอบอยู่ชั่วขณะ รอ 1–2 วินาทีแล้วทดสอบใหม่
+กู้คืน: `sudo rm /etc/nginx/conf.d/21-csp.conf && sudo cp /root/phaseD-backup-20261028/freexduk.duckdns.org /etc/nginx/sites-available/ && sudo nginx -t && sudo systemctl reload nginx`
+
 ---
 
 ## บันทึกปัญหาที่เจอ

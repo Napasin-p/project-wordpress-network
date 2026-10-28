@@ -266,10 +266,10 @@ site/, client/              ไฟล์ประกอบ
 ----------------------------------------------------------------------
 9. งานที่ยังค้าง (ต้องรอเจ้าของงานตกลงก่อน)
 ----------------------------------------------------------------------
-[ ] ก่อนวันนำเสนอ: เปิด logwatch.timer กลับ แล้วสแกน 1 รอบ (~$0.02)
-      sudo systemctl enable --now logwatch.timer
-      sudo systemctl start logwatch.service
-      journalctl -u logwatch.service -n 50 --no-pager
+[x] เปิด logwatch.timer กลับแล้ว (24 ต.ค.) — สแกนทุก 6 ชม.
+[ ] C2: ให้ sudo ต้องใส่รหัสผ่าน — ทำตอนจบโปรเจกต์ (เจ้าของงานตกลงแล้ว)
+      แก้ /etc/sudoers.d/90-cloud-init-users: NOPASSWD:ALL → ALL · ตรวจด้วย visudo -c ก่อน
+      หลังทำ agent จะใช้ sudo ไม่ได้อีก
 [ ] โพสต์ข่าวตัวอย่าง (มีคำว่า 【ตัวอย่าง】) → เปลี่ยนเป็น draft
     (กระทบเนื้อหาเว็บ — บอกทีมก่อน)
 [ ] ตั้ง blog_public=1 (ให้ search engine เห็นเว็บ) ถ้าทีมต้องการ
@@ -278,6 +278,21 @@ site/, client/              ไฟล์ประกอบ
 [ ] (ถ้าต้องการ) ดึงตัวเลข firewall ล่าสุดก่อนวันนำเสนอ
       sudo iptables -L GEO-CHECK -v -n -x
 [ ] หลังส่งงาน: คิดเรื่องปิด/ลบ VM เพื่อไม่ให้เครดิต Azure หมด (ถามเจ้าของงาน)
+
+
+--- การเปลี่ยนแปลงหลังตรวจความปลอดภัย (28 ต.ค.) — รายละเอียดใน runbook 2.4–2.7 ---
+- ผู้ใช้ WordPress: administrator เหลือ ID 1 คนเดียว · อีก 7 คนเป็น editor
+  (editor แก้หน้า/โพสต์/รูปได้ แต่ติดตั้งปลั๊กอิน จัดการผู้ใช้ และเข้า Customize ของธีมไม่ได้)
+  ติดตั้งปลั๊กอิน two-factor แล้ว (ยังไม่บังคับ แต่ละคนเปิดเองในโปรไฟล์)
+- mu-plugins: block-user-enum.php (กัน ?author= / /author/ / oEmbed) · hide-wp-version.php
+- CSP แบบ hash บังคับใช้กับหน้าสาธารณะ: /etc/nginx/conf.d/21-csp.conf (สร้างโดย csp-update-hashes.sh)
+  ⚠️ ถ้าทีมแก้/เพิ่มสคริปต์ในหน้าเว็บ สคริปต์นั้นจะถูกบล็อกจนกว่าจะรัน:
+        sudo csp-update-hashes.sh --enforce
+     ห้ามตั้ง cron ให้รันเอง (จะรับรองสคริปต์ที่ถูกฝังให้อัตโนมัติ)
+     ถ้ารัน 10-reverse-proxy.sh ใหม่ ต้องรัน 11-csp-strict.sh --enforce ซ้ำ
+- th-ipset-refresh.sh มีตัวตรวจรายการผิดปกติ (--selftest ได้) · ดูคำเตือน: journalctl -t th-ipset
+- duckdns-update.sh ส่ง token ทาง stdin (curl -K -) ไม่ผ่าน argument
+- ต่อ SSH ถี่เกิน 10 ครั้ง/นาที จะโดนกฎ SSHBRUTE ของเราเอง — รวมคำสั่งไว้ใน session เดียว
 
 
 ----------------------------------------------------------------------
