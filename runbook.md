@@ -728,6 +728,29 @@ requests 1,076 (IP ไทยทั้งหมด) · geo-block DROP 290 (104 IP
 ```
 ปิดอีกครั้งได้ด้วย `sudo systemctl disable --now logwatch.timer`
 
+### 2.4 ปิดการสืบชื่อ login ของผู้ใช้ให้ครบทุกช่องทาง (28 ต.ค.)
+พบจากการตรวจความปลอดภัย: `/?author=1..8` → 301 ไป `/author/<ชื่อ login>/` ครบทั้ง 8 บัญชี (ทุกบัญชี user_nicename = user_login)
+**สาเหตุ:** mu-plugin `block-user-enum.php` กัน `?author=` ที่ `template_redirect` priority 10 แต่ `redirect_canonical` ของ WordPress อยู่ priority เดียวกันและได้คิวก่อน
+นอกจากนี้ยังหลุดผ่านลิงก์ผู้เขียนในหน้าข่าว, oEmbed (`author_url`) และชื่อผู้เขียนที่ตรงกับ login (1 บัญชี)
+**แก้ (เฉพาะคนที่ไม่ได้ login):** `?author=N` → หน้าแรก (priority 1) · `/author/<ชื่อ>/` → 404 · `author_link` → หน้าแรก · oEmbed ตัด `author_url` · ชื่อที่ตรงกับ login → ชื่อเว็บ
+โค้ดเดียวกันอยู่ใน `scripts/08-site-content.sh`
+```bash
+sudo install -d -m 700 /root/a1-backup-20261028 && sudo cp -a /var/www/freexduk/wp-content/mu-plugins/block-user-enum.php /root/a1-backup-20261028/
+php -l /tmp/bue.php
+sudo install -m 644 -o www-data -g www-data /tmp/bue.php /var/www/freexduk/wp-content/mu-plugins/block-user-enum.php
+cd /var/www/freexduk && sudo -u www-data wp cache-enabler clear
+sudo find /var/cache/nginx/micro -type f -delete      # ล้าง micro-cache (หน้าเก่ามีลิงก์ /author/ ค้าง)
+```
+**ผลลัพธ์:** ✅
+```
+คนนอก: ?author=1..8 → 301 ไปหน้าแรก · /author/<ชื่อ>/ → 404 · ลิงก์ /author/ ในหน้าข่าวและ feed: 0
+       oEmbed author_url: 0 · ชื่อ login ปรากฏใน feed/หน้าข่าว: 0 · /wp-json/wp/v2/users → 404
+ทีม (login): /wp/v2/users/me → 200 · ลิงก์ author ปกติ
+หน้า / /curriculum/ /admission/ /wp-login.php → 200 · ไม่มี PHP error
+```
+กู้คืน: `sudo cp /root/a1-backup-20261028/block-user-enum.php /var/www/freexduk/wp-content/mu-plugins/`
+หมายเหตุ: `/news/` ได้ 404 อยู่ก่อนแล้ว (ไม่มีหน้า news ใน WordPress — ไม่เกี่ยวกับการแก้นี้)
+
 ---
 
 ## บันทึกปัญหาที่เจอ

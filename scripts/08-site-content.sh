@@ -93,7 +93,8 @@ cat >"$WP_ROOT/wp-content/mu-plugins/block-user-enum.php" <<'PHP'
 <?php
 /**
  * Plugin Name: Block user enumeration (anonymous only)
- * Description: คนที่ไม่ได้ login จะสืบรายชื่อ user ไม่ได้ (REST /wp/v2/users และ ?author=N)
+ * Description: คนที่ไม่ได้ login จะสืบรายชื่อ user ไม่ได้ — REST /wp/v2/users, ?author=N, หน้า /author/<ชื่อ>/,
+ *              ลิงก์ผู้เขียน, oEmbed และชื่อผู้เขียนที่ตรงกับชื่อ login
  *              แต่ block editor ของคนที่ login อยู่ยังเรียก /wp/v2/users/me ได้ปกติ
  */
 add_filter( 'rest_endpoints', function ( $endpoints ) {
@@ -106,11 +107,46 @@ add_filter( 'rest_endpoints', function ( $endpoints ) {
 	}
 	return $endpoints;
 } );
+
+// priority 1: ต้องทำงานก่อน redirect_canonical (priority 10)
+// ไม่งั้น WordPress พา ?author=N ไปที่ /author/<ชื่อ login>/ ก่อนถึงโค้ดนี้
 add_action( 'template_redirect', function () {
-	if ( isset( $_GET['author'] ) && ! is_user_logged_in() ) {
+	if ( is_user_logged_in() ) {
+		return;
+	}
+	if ( isset( $_GET['author'] ) ) {
 		wp_safe_redirect( home_url( '/' ), 301 );
 		exit;
 	}
+	if ( is_author() ) {
+		global $wp_query;
+		$wp_query->set_404();
+		status_header( 404 );
+		nocache_headers();
+	}
+}, 1 );
+
+// ลิงก์ผู้เขียน (/author/<ชื่อ>/) ในหน้าข่าว → ชี้ไปหน้าแรกแทน
+add_filter( 'author_link', function ( $link ) {
+	return is_user_logged_in() ? $link : home_url( '/' );
+} );
+
+// oEmbed (/wp-json/oembed/...) ส่ง author_url ที่มีชื่อ login ออกไป
+add_filter( 'oembed_response_data', function ( $data ) {
+	if ( ! is_user_logged_in() ) {
+		unset( $data['author_url'] );
+		$data['author_name'] = get_bloginfo( 'name' );
+	}
+	return $data;
+} );
+
+// ชื่อผู้เขียนที่ตรงกับชื่อ login (หน้าข่าว + RSS dc:creator) → แสดงเป็นชื่อเว็บ
+add_filter( 'the_author', function ( $name ) {
+	global $authordata;
+	if ( ! is_user_logged_in() && $authordata && $name === $authordata->user_login ) {
+		return get_bloginfo( 'name' );
+	}
+	return $name;
 } );
 PHP
 chown www-data:www-data "$WP_ROOT/wp-content/mu-plugins/block-user-enum.php"
