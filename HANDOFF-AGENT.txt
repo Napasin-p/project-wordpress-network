@@ -293,6 +293,9 @@ site/, client/              ไฟล์ประกอบ
 - th-ipset-refresh.sh มีตัวตรวจรายการผิดปกติ (--selftest ได้) · ดูคำเตือน: journalctl -t th-ipset
 - duckdns-update.sh ส่ง token ทาง stdin (curl -K -) ไม่ผ่าน argument
 - ต่อ SSH ถี่เกิน 10 ครั้ง/นาที จะโดนกฎ SSHBRUTE ของเราเอง — รวมคำสั่งไว้ใน session เดียว
+- ระบบแจ้งเตือน Discord: alert-check.timer ทุก 5 นาที (scripts/12-alerts.sh · runbook 2.9)
+  webhook อยู่ใน /etc/alert.env (600) — เป็นความลับ ห้ามแสดง/ขอในแชท · ทดสอบ: sudo alert-check --dry-run
+- PHP2Shell (CVE-2026-109618/109619) แพตช์แล้ว (8.3.6-0ubuntu0.24.04.13) · CVE-2026-115560 ไม่เข้าเงื่อนไข (runbook 2.8)
 
 
 ----------------------------------------------------------------------

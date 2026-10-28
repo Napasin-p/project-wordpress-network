@@ -829,6 +829,37 @@ sudo ./11-csp-strict.sh --enforce   # บังคับใช้
 🐞 ทดสอบ header ทันทีหลัง `systemctl reload nginx` ได้ค่าเก่า — worker เดิมยังตอบอยู่ชั่วขณะ รอ 1–2 วินาทีแล้วทดสอบใหม่
 กู้คืน: `sudo rm /etc/nginx/conf.d/21-csp.conf && sudo cp /root/phaseD-backup-20261028/freexduk.duckdns.org /etc/nginx/sites-available/ && sudo nginx -t && sudo systemctl reload nginx`
 
+### 2.8 ตรวจ PHP2Shell (28 ต.ค.)
+ประกาศฉุกเฉิน 21 ต.ค.: CVE-2026-109618 / 109619 (RCE ไม่ต้อง login, CVSS 9.2, มีการโจมตีจริง) — Ubuntu แก้ใน USN-8948-1 → `8.3.6-0ubuntu0.24.04.13`
+```bash
+dpkg-query -W php8.3-fpm                               # 8.3.6-0ubuntu0.24.04.13 ✅ (= candidate ล่าสุด)
+zcat /usr/share/doc/php8.3-common/changelog.Debian.gz | head   # มี CVE-2026-109618_109619.patch
+grep "upgrade php8.3" /var/log/dpkg.log | tail -1      # unattended-upgrades ติดตั้งเอง 22 ต.ค. 06:13
+systemctl show php8.3-fpm -p ActiveEnterTimestamp      # รีสตาร์ท 27 ต.ค. (หลังอัปเดต) ✅
+```
+CVE-2026-115560 (23 ต.ค. ยังไม่มีแพตช์): ต้องมีโค้ดเปลี่ยน `session.serialize_handler` ด้วย `ini_set()` + `session_start()` — ค้นทั้งเว็บไม่พบ → ไม่เข้าเงื่อนไข
+ทางลดเสี่ยงที่ PHP แนะนำ (`session.upload_progress.enabled=0`) — เจ้าของงานเลือกยังไม่ทำ
+
+### 2.9 ระบบแจ้งเตือนทาง Discord (28 ต.ค.) — `scripts/12-alerts.sh`
+`/usr/local/sbin/alert-check` (python3, root) · `alert-check.timer` ทุก 5 นาที · webhook ใน `/etc/alert.env` (600 root) · state `/var/lib/alert/state.json`
+| ประเภท | เงื่อนไข |
+|---|---|
+| สถานะ (แจ้งครั้งแรก · เตือนซ้ำทุก 6 ชม. · แจ้งตอนหาย) | `/` หรือ `/wp-login.php` ไม่ใช่ 200 · nginx/php8.3-fpm/mysql/fail2ban/docker ไม่ active · container dashboard หยุด · INPUT ไม่ใช่ DROP · th-net < 100 ช่วง · ใบรับรอง < 14 วัน · ดิสก์ > 90% · AI ไม่ได้สแกน > 13 ชม. |
+| เหตุการณ์ (แจ้งครั้งเดียว) | `journalctl -t th-ipset -p warning` ใหม่ · AI สแกนล้มเหลว · ผล AI ระดับ medium ขึ้นไป (ทั้ง threat_level หรือ incident) |
+ข้อความจาก AI ผ่าน `mask()`: IPv4 → `a.b.x.x` · IPv6 → `xxxx:xxxx:…` · `@` → `＠` · ส่งด้วย `allowed_mentions: {parse: []}`
+```bash
+sudo ./12-alerts.sh                 # ติดตั้ง
+sudo alert-check --dry-run          # ตรวจแต่ไม่ส่ง
+```
+**ผลลัพธ์:** ✅ timer ทำงาน · dry-run ตอนนี้: ไม่มีปัญหา
+จำลองปัญหา (ไม่ส่งจริง): บริการชื่อไม่มีจริง + เว็บตอบ 502 → ตรวจพบทั้งคู่ · ผล AI medium ปลอม → ส่ง 1 ข้อความ IP ถูกซ่อน `@everyone` ถูกปิด incident low ไม่ส่ง · run เดิมซ้ำ → ไม่แจ้งซ้ำ
+**เจ้าของงานใส่ webhook เอง** (ห้ามส่งในแชท):
+```bash
+read -rsp "Webhook URL: " U; echo; echo "DISCORD_WEBHOOK_URL=$U" | sudo tee /etc/alert.env >/dev/null; sudo chmod 600 /etc/alert.env; unset U
+sudo alert-check --test
+```
+ปิด: `sudo systemctl disable --now alert-check.timer`
+
 ---
 
 ## บันทึกปัญหาที่เจอ
