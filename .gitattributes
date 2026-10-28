@@ -1,0 +1,4 @@
+# บังคับท้ายบรรทัดแบบ LF ทุกเครื่อง — สคริปต์ bash ที่มี CRLF จะรันบนเซิร์ฟเวอร์ไม่ได้
+* text=auto eol=lf
+*.docx binary
+*.png binary

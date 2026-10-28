@@ -1,0 +1,11 @@
+[Unit]
+Description=logwatch: เตรียม log แล้วให้ Claude วิเคราะห์ (Stage 2)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/logwatch/prepare.sh
+ExecStart=/usr/bin/docker compose -f /opt/logwatch/docker-compose.yml run --rm analyzer
+TimeoutStartSec=600

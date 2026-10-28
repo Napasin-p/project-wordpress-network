@@ -1,0 +1,352 @@
+======================================================================
+ HANDOFF — โครงงาน WordPress บน VPS แบบปลอดภัย
+ เอกสารส่งต่อสำหรับ AI agent ตัวถัดไป และสมาชิกในทีม
+ อัปเดตล่าสุด: 22 ต.ค. 2026
+======================================================================
+
+วิธีใช้ไฟล์นี้
+- ถ้าคุณเป็น AI agent: อ่านไฟล์นี้ให้จบก่อนลงมือทำอะไร โดยเฉพาะข้อ 2 (กฎ)
+  และข้อ 10 (กับดักที่เจอมาแล้ว)
+- รายละเอียดคำสั่งและผลลัพธ์ทุกขั้นอยู่ใน runbook.md (ไฟล์หลักของโปรเจค)
+- ไฟล์นี้ไม่มีรหัสผ่าน, token หรือ API key ใด ๆ และห้ามเพิ่มลงไป
+
+
+----------------------------------------------------------------------
+1. โครงงานคืออะไร
+----------------------------------------------------------------------
+งานกลุ่มวิชาเครือข่าย (BUU, สมาชิก 6 คน) ทำ WordPress บน VPS ให้ปลอดภัย
+
+Stage 1
+  ด่าน 1  เซิร์ฟเวอร์ + HTTPS + SSH ปลอดภัย
+  ด่าน 2  Firewall บล็อกต่างประเทศ เข้าได้เฉพาะ IP ไทย
+  ด่าน 3  เว็บแนะนำหลักสูตรวิทยาการคอมพิวเตอร์ (CS)
+Stage 2
+  Reverse proxy, Cloudflare cache, AI สแกน log → Security Dashboard
+
+ส่งงานและตรวจทั้งสอง Stage พร้อมกัน: 28 ต.ค. 2026
+
+สถานะ ณ 22 ต.ค.: ทำครบแล้วทุกด่าน ยกเว้น Cloudflare
+(ทำไม่ได้กับ DuckDNS — ดูข้อ 7) รายงาน Word และสไลด์นำเสนอเสร็จแล้ว
+
+
+----------------------------------------------------------------------
+2. กฎจากเจ้าของงาน (ต้องทำตามทุกครั้ง)
+----------------------------------------------------------------------
+1) ก่อนแก้ sshd_config หรือ firewall (iptables/ipset/NSG/fail2ban)
+   ต้องถามเจ้าของงานก่อนทุกครั้ง แล้วรอคำตอบ "ได้" ชัดเจน
+2) ทำทีละขั้น หลังแต่ละขั้นแสดงคำสั่งที่ใช้และผลลัพธ์
+3) จดคำสั่งทั้งหมดและผลลัพธ์ลง runbook.md (ใช้ทำรายงาน)
+4) สิ่งที่เจ้าของงานทำเอง ห้ามทำแทน:
+   - สมัคร/จ่ายเงิน Azure, DuckDNS, บริการอื่น ๆ
+   - สร้าง SSH key
+   - ตั้งรหัสผ่านทุกอย่าง (MySQL, WordPress, sudo, htpasswd dashboard)
+     → ให้บอกคำสั่ง แล้วให้เขาพิมพ์รหัสเอง
+5) ห้ามขอ/แสดง token, API key, รหัสผ่าน ในแชท
+   - secret อยู่ใน config.env (เครื่อง local) และ /etc/logwatch.env,
+     /etc/duckdns.env บนเซิร์ฟเวอร์ (สิทธิ์ 600) เท่านั้น
+   - ห้าม cat ไฟล์เหล่านี้ ถ้าต้องตรวจให้ดูแค่ว่ามีตัวแปรหรือไม่
+     เช่น grep -c '^ANTHROPIC_API_KEY=' (ไม่พิมพ์ค่า)
+6) หน้าเว็บ (pages/posts/theme/menu) เป็นงานของทีมออกแบบ
+   - ถ้าจะแก้อะไรที่กระทบหน้าเว็บ ต้องบอกก่อน และเตือนถ้าจะไปทับงานที่ทีมทำ
+   - ห้ามรัน scripts/08-site-content.sh --force (จะทับหน้าเว็บของทีม)
+   - เจ้าของงานยืนยันแล้วว่าด่าน 3 "คงไว้อย่างนี้"
+7) งานที่มีค่าใช้จ่าย (เรียก Claude API) ให้บอกค่าใช้จ่ายโดยประมาณก่อนทำ
+
+
+----------------------------------------------------------------------
+3. ข้อมูลเซิร์ฟเวอร์
+----------------------------------------------------------------------
+Cloud         Azure for Students (เครดิตนักศึกษา, จำกัด region ด้วย policy)
+Region        Malaysia West
+Size          Standard_B2als_v2 (2 vCPU / 4 GB RAM) + swap 2 GB, disk ~29 GB
+OS            Ubuntu 24.04.5 LTS, kernel 7.0.0-1017-azure
+Public IP     172.197.162.225
+Domain        freexduk.duckdns.org (DuckDNS ฟรี, cron อัปเดต IP ทุก 5 นาที)
+Resource grp  rg-wordpress   NSG: wp-vps-nsg (เปิด 22/80/443 เท่านั้น)
+Admin user    sysadmin (sudo NOPASSWD จาก cloud-init; มีรหัสผ่านไว้ใช้ Serial Console)
+
+ซอฟต์แวร์
+  Nginx 1.24.0 · PHP-FPM 8.3.6 · MySQL 8.0.46 · WordPress 7.1.3
+  Theme Kadence 1.5.2 · OpenSSL 3.0.13 · acme.sh v3.1.7 · Docker 29.1.3
+
+เว็บ
+  https://freexduk.duckdns.org/                      หน้าเว็บ
+  https://freexduk.duckdns.org/wp-admin/             หลังบ้าน (สมาชิก 6 คน มีบัญชีของตัวเอง,
+                                                      role administrator, ไม่มี user ชื่อ admin)
+  https://freexduk.duckdns.org/security-dashboard/   Dashboard (Basic Auth)
+  หมายเหตุ: เปิดได้เฉพาะจาก IP ไทย
+
+
+----------------------------------------------------------------------
+4. วิธีเข้าเครื่อง (จาก Windows ของเจ้าของงาน)
+----------------------------------------------------------------------
+- ssh alias: wp-vps  (ใน C:\Users\<you>\.ssh\config, IdentitiesOnly yes,
+  key ~/.ssh/id_ed25519_vps มี passphrase → โหลดไว้ใน Windows ssh-agent)
+- ต้องเข้าจาก IP ไทยเท่านั้น (geo-block) ถ้าใช้ VPN ต่างประเทศจะเข้าไม่ได้
+- สำหรับ agent ที่รันคำสั่งผ่าน Bash:
+    * ใช้ Git Bash + /c/Windows/System32/OpenSSH/ssh.exe (ตัวนี้คุยกับ
+      Windows ssh-agent ได้) แล้วส่งคำสั่งยาว ๆ ผ่าน heredoc stdin:
+        /c/Windows/System32/OpenSSH/ssh.exe wp-vps 'bash -s' <<'EOF'
+        ...คำสั่ง...
+        EOF
+    * อย่าส่งคำสั่งที่มี quote ผ่าน PowerShell 5.1 (มันตัด quote ทิ้ง)
+    * BatchMode ใช้ได้ก็ต่อเมื่อ key อยู่ใน agent แล้ว ถ้าไม่ได้ให้ขอเจ้าของงาน
+      รัน ssh-add เอง
+- หลัง scp จาก Windows ต้อง chmod -R go-rwx ~/wordpress-vps-project
+  (scp ตั้งสิทธิ์เป็น drwx---rwx ทำให้ user อื่นแก้สคริปต์ที่รันด้วย sudo ได้)
+- WP-CLI: cd /var/www/freexduk ก่อน แล้วใช้ sudo -u www-data wp ...
+  (ถ้าไม่ cd จะเจอ posix_spawn denied)
+
+ทางกู้ถ้าล็อกตัวเองออก
+  1. รอ auto-rollback 5 นาที (ถ้ากำลังรัน 06-firewall-th-only.sh)
+  2. Azure Portal → VM → Help → Serial console → login sysadmin
+     → sudo ~/wordpress-vps-project/scripts/06-firewall-th-only.sh --rollback
+  3. Azure Portal → VM → Help → Reset password / reset SSH
+     (ใช้ VM agent ผ่าน 168.63.129.16 ซึ่ง firewall อนุญาตไว้ — ห้ามบล็อก IP นี้)
+
+
+----------------------------------------------------------------------
+5. สถาปัตยกรรม (ทางเดินของ request)
+----------------------------------------------------------------------
+ผู้ใช้ (IP ไทย)
+  → Azure NSG (22/80/443)
+  → iptables INPUT policy DROP → GEO-CHECK (ipset th-net / th-net6)
+       ไม่ใช่ไทย → LOGDROP (log prefix "GEOBLOCK-DROP") → ทิ้ง
+  → fail2ban (jail: sshd, wordpress-login, nginx-botsearch)
+  → Nginx หน้าบ้าน :443 (TLS, rate limit, micro-cache 10 วินาที,
+                          X-Cache-Status, client_max_body_size 32m)
+       ├→ 127.0.0.1:8080  Nginx origin → PHP-FPM → WordPress → MySQL
+       └→ 127.0.0.1:8081  /security-dashboard/ (container, Basic Auth)
+
+port 80 → redirect ไป https
+
+
+----------------------------------------------------------------------
+6. รายละเอียดแต่ละด่าน (ทำแล้ว ✅)
+----------------------------------------------------------------------
+ด่าน 1 — SSH + HTTPS
+  - /etc/ssh/sshd_config.d/00-hardening.conf
+      PermitRootLogin no, PasswordAuthentication no,
+      AuthenticationMethods publickey, AllowUsers sysadmin, MaxAuthTries 3
+    ต้องชื่อขึ้นต้น 00- เพราะ sshd ใช้ค่าแรกที่เจอ (first match wins)
+    และไฟล์ 50-cloud-init.conf ของ cloud-init จะทับถ้าเรามาทีหลัง
+  - ตรวจด้วย sudo sshd -T | grep -E 'permitroot|password|authenticationmethods'
+  - HTTPS: acme.sh + Let's Encrypt แบบ DNS-01 (dns_duckdns, --server letsencrypt)
+    ไม่ใช้ HTTP-01 เพราะ Let's Encrypt ตรวจจากต่างประเทศ → โดน geo-block
+    ใบรับรองหมดอายุ ~8 ม.ค. 2027, ต่ออายุอัตโนมัติด้วย cron ของ root
+  - nginx: server_tokens off (conf.d/00-hardening.conf), ssl_protocols TLSv1.2 TLSv1.3
+
+ด่าน 2 — Firewall ไทยเท่านั้น
+  - ipset th-net (IPv4 665 ช่วง) และ th-net6 (IPv6 219 ช่วง) จาก ipdeny
+  - chain GEO-CHECK และ LOGDROP; port 22/80/443 ต้องผ่าน GEO-CHECK
+  - อนุญาต lo, ESTABLISHED/RELATED, 168.63.129.16 (Azure platform)
+  - บันทึกถาวร: netfilter-persistent + ipset-persistent (ทดสอบ reboot จริงแล้ว)
+  - cron อัปเดต IP ไทย: /etc/cron.d/th-ipset-refresh ทุกวันอาทิตย์ 04:30
+    (/usr/local/sbin/th-ipset-refresh.sh — สร้าง set ใหม่แล้ว swap)
+  - สคริปต์ 06 มี auto-rollback 5 นาทีผ่าน systemd-run และ --rollback
+  - ผลจริง (22 ต.ค.): GEO-CHECK ทิ้ง 20,812 / รับจากไทย 2,152,
+    SSH พยายามเชื่อมต่อใหม่ 13,611 ครั้ง, log GEOBLOCK 4,771 บรรทัดใน 7 วัน,
+    check-host.net 40/40 จุดทั่วโลกเข้าไม่ได้
+
+ด่าน 3 — เว็บหลักสูตร (ทีมออกแบบเอง)
+  - หน้า: หน้าแรก, หลักสูตร (/curriculum/ มี anchor: เกี่ยวกับ, โครงสร้าง,
+    อาชีพ, ผลงาน — อยู่ในหน้าเดียว ไม่ใช่หน้าแยก), สหกิจศึกษา,
+    รับสมัคร TCAS (/admission/), อาจารย์และติดต่อ
+  - plugin: Kadence, Cache Enabler, EWWW Image Optimizer, Contact Form 7
+    + Flamingo, Limit Login Attempts
+  - ฟอร์มติดต่อ: Azure บล็อก port 25 ขาออก → CF7 skip_mail + Flamingo
+    เก็บข้อความใน wp-admin → Flamingo → Inbound Messages
+  - hardening:
+      mu-plugins/disable-xmlrpc.php (+ nginx ตอบ 403 ที่ /xmlrpc.php)
+      mu-plugins/block-user-enum.php (ซ่อน /wp-json/wp/v2/users เฉพาะคนไม่ login)
+      PHP ใน wp-content/uploads → 403
+      DISALLOW_FILE_EDIT true, WP_CACHE true
+      /etc/hosts: 127.0.0.1 freexduk.duckdns.org (ให้ WP-Cron ทำงาน)
+  - สำรองไว้: ~/backups/wp-db-20261010-1803.sql.gz และ
+    ~/backups/wp-content-20261010-1803.tar.gz (ก่อนทีมเริ่มแก้)
+
+Stage 2 — Reverse proxy (scripts/10-reverse-proxy.sh, --rollback ได้)
+  - ไฟล์: /etc/nginx/conf.d/20-proxy.conf, snippets/proxy-params.conf,
+    sites-available/wp-origin, sites-available/freexduk.duckdns.org (หน้าบ้าน)
+  - rate limit: ทั่วไป 10 r/s burst 100; /wp-login.php 10 r/m burst 5 → 429
+  - ไม่ cache: cookie wordpress_logged_in_*/wp-postpass_*/comment_author_*,
+    method ไม่ใช่ GET/HEAD, มี query string, /wp-admin /wp-login.php
+    /wp-json /xmlrpc.php /wp-cron.php /feed
+  - origin ใช้ real_ip จาก X-Forwarded-For; log หลักอยู่ที่หน้าบ้าน
+    (access.log — fail2ban/logwatch อ่านไฟล์นี้), origin แยก origin-access.log
+  - สำรอง config เดิม: /root/nginx-backup-phase2
+  - ผลวัด (15 ต.ค., จากเครื่องในไทย):
+      TTFB หน้าแรก 0.293 → 0.156 s (−47%)
+      /curriculum/ 0.331 → 0.155 s (−53%), /admission/ 0.237 → 0.154 s (−35%)
+      load 15.1 → 22.3 req/s (+48%), p95 1.013 → 0.469 s (−54%)
+
+Stage 2 — AI log scan (logwatch, scripts/09-logwatch.sh)
+  - โค้ด: logwatch/ → ติดตั้งที่ /opt/logwatch (root เป็นเจ้าของ)
+  - ข้อมูล: /var/lib/logwatch/{in,geo,out}; out มี latest.json,
+    history.json, usage.json
+  - ขั้นตอน: systemd logwatch.timer (ทุก 6 ชม.) → logwatch.service
+      ① prepare.sh (host, root) คัด log 26 ชม. ล่าสุด: nginx access,
+        journalctl -k GEOBLOCK, ssh, fail2ban, สถานะบริการ/ใบรับรอง
+        + ฐานประเทศ ipdeny countries/all-zones.tar.gz (241 ประเทศ)
+      ② docker compose run --rm analyzer (user 65534/nobody, read-only,
+        cap_drop ALL, no-new-privileges, network host)
+        สรุปสถิติด้วยโค้ด → ส่งสรุป ~4K token ให้ Claude
+        → structured outputs (json_schema) → เขียน /out
+  - Docker daemon ตั้ง "iptables": false และ "bridge": "none"
+    (ไม่ให้ Docker เขียนกฎทะลุ geo-block)
+  - Dashboard: container nginx-unprivileged ฟัง 127.0.0.1:8081,
+    static HTML/JS ใช้ textContent + CSP (กัน XSS จากข้อความใน log)
+    Basic Auth: /etc/nginx/.htpasswd-dashboard (เจ้าของงานตั้งเอง)
+  - API: ตัวแปรใน /etc/logwatch.env (600) — key ต้องเป็นแบบผูก workspace
+    (โค้ดรองรับ ANTHROPIC_WORKSPACE_ID ด้วย), มี server-side fallback
+  - Model: claude-sonnet-5-5 (~$0.022/รอบ, ~13 วินาที)
+    เคยลอง claude-opus-5-5 ($0.077/รอบ, 31.7 วินาที) ผลใกล้เคียงกัน
+    ใช้ไปแล้วรวม ~$0.10 จากเครดิต $5
+  - ⚠️ ตอนนี้ logwatch.timer ถูกปิดไว้ (เจ้าของงานสั่งพักเพื่อประหยัด token)
+  - สิ่งที่ AI เจอรอบแรก: กฎ nginx บล็อก /users/me ของ editor ทีม (313 ครั้ง)
+    และ IP ของเซิร์ฟเวอร์เองโดน geo-block 99 ครั้ง → WP-Cron เสียตั้งแต่ 11 ต.ค.
+    ทั้งสองข้อแก้แล้ว
+
+
+----------------------------------------------------------------------
+7. Cloudflare — ทำไมไม่ได้ทำ
+----------------------------------------------------------------------
+- Cloudflare ต้องย้าย nameserver ของโดเมนไปให้ Cloudflare
+- DuckDNS เป็น subdomain ฟรี ตั้งได้แค่ A / AAAA / TXT → ทำไม่ได้
+- โดเมนฟรีจาก GitHub Student Pack ใช้ไม่สะดวก (ติดปัญหาบัญชี)
+- เจ้าของงานตัดสินใจไม่ทำ แต่รายงานและสไลด์อธิบายเหตุผลพร้อมแบบที่ออกแบบไว้:
+    ทาง A (ปัจจุบัน) duckdns ตรงเข้าเครื่อง + iptables
+    ทาง B (ถ้ามีโดเมนจริง) Cloudflare WAF กรองประเทศ + CDN,
+          origin รับเฉพาะ IP ของ Cloudflare
+- ถ้าจะทำในอนาคต: ต้องแก้ geo-block ให้รับ IP ของ Cloudflare และตั้ง
+  real_ip จาก CF-Connecting-IP — ถามเจ้าของงานก่อนแตะ firewall
+
+
+----------------------------------------------------------------------
+8. ไฟล์ในโปรเจค (E:\wordpress-vps-project\)
+----------------------------------------------------------------------
+config.env            ค่าตั้งค่า + secret (ห้ามแสดง ห้าม commit)
+config.env.example    ตัวอย่างไม่มี secret
+runbook.md            บันทึกคำสั่ง + ผลลัพธ์ทุกขั้น (ไฟล์หลัก)
+README.md
+report-stage1.md, report-stage1-2.md     ร่างรายงานเดิม (markdown)
+docs/01-architecture.md                 สถาปัตยกรรม
+docs/02..05-*.md                        คู่มือแต่ละหัวข้อ (เขียนตอนวางแผน)
+docs/06-stage2-plan.md                  แผน Stage 2
+docs/stage2-perf-after-phase2.txt       ผลวัดหลัง reverse proxy
+docs/division-of-work.md                แบ่งงานในทีม
+scripts/
+  lib/common.sh             ฟังก์ชันกลาง
+  00a-update-swap.sh        อัปเดต + swap
+  00b-create-admin-user.sh  user sysadmin + key สมาชิก
+  01-harden-ssh.sh          ⚠️ ถามก่อนรัน
+  02-install-lemp.sh
+  03-install-wordpress.sh
+  04-duckdns.sh
+  05-https-acme.sh
+  06-firewall-th-only.sh    ⚠️ ถามก่อนรัน (มี auto-rollback, --rollback)
+  07-fail2ban.sh            ⚠️ ถามก่อนรัน
+  08-site-content.sh        ⚠️ ห้ามใช้ --force (ทับหน้าเว็บทีม)
+  09-logwatch.sh            ติดตั้ง logwatch (--run = วิเคราะห์ทันที, เสียเงิน)
+  10-reverse-proxy.sh       (--rollback)
+  99-collect-evidence.sh    เก็บหลักฐานสำหรับรายงาน
+logwatch/                   logwatch.py, prepare.sh, Dockerfile,
+                            docker-compose.yml, dashboard/, systemd/
+site/, client/              ไฟล์ประกอบ
+
+ผลงานส่ง
+  รายงานโครงงาน-WordPress-VPS.docx      รายงานฉบับเต็ม 18 หน้า
+                                        (มีกรอบใส่ภาพหน้าจอ 13 จุด ให้ทีมแปะภาพ)
+  สรุปงาน-WordPress-VPS-Stage1.docx     สรุปให้ทีมอ่าน (14 หน้า)
+  สไลด์นำเสนอ 20 หน้า (Claude artifact, เป็นส่วนตัวจนกว่าเจ้าของจะกด Share):
+    https://claude.ai/artifact/7BkwbCx7c6kj8Lpi1pMTza
+    ยังต้องเติม: ชื่อกลุ่ม/สมาชิก (สไลด์ 1), ภาพ Security Dashboard (สไลด์ 16)
+
+
+----------------------------------------------------------------------
+9. งานที่ยังค้าง (ต้องรอเจ้าของงานตกลงก่อน)
+----------------------------------------------------------------------
+[ ] ก่อนวันนำเสนอ: เปิด logwatch.timer กลับ แล้วสแกน 1 รอบ (~$0.02)
+      sudo systemctl enable --now logwatch.timer
+      sudo systemctl start logwatch.service
+      journalctl -u logwatch.service -n 50 --no-pager
+[ ] โพสต์ข่าวตัวอย่าง (มีคำว่า 【ตัวอย่าง】) → เปลี่ยนเป็น draft
+    (กระทบเนื้อหาเว็บ — บอกทีมก่อน)
+[ ] ตั้ง blog_public=1 (ให้ search engine เห็นเว็บ) ถ้าทีมต้องการ
+[ ] สมาชิกเก็บภาพหน้าจอเอง: เปิดเว็บผ่าน VPN ต่างประเทศไม่ได้,
+    หน้า Security Dashboard, กุญแจ HTTPS → ใส่รายงาน/สไลด์
+[ ] (ถ้าต้องการ) ดึงตัวเลข firewall ล่าสุดก่อนวันนำเสนอ
+      sudo iptables -L GEO-CHECK -v -n -x
+[ ] หลังส่งงาน: คิดเรื่องปิด/ลบ VM เพื่อไม่ให้เครดิต Azure หมด (ถามเจ้าของงาน)
+
+
+----------------------------------------------------------------------
+10. กับดักที่เจอมาแล้ว (อย่าพลาดซ้ำ)
+----------------------------------------------------------------------
+Azure
+- Azure for Students จำกัด region/size ด้วย policy → ใช้
+  az policy / az vm list-skus ดู restriction (แยก Location กับ Zone)
+- port 25 ขาออกถูกบล็อก → ส่งอีเมลจาก WordPress ไม่ได้
+
+SSH / ระบบ
+- sshd: first match wins → drop-in ต้องชื่อ 00-*
+- sudo ตัดตัวแปร SSH_CLIENT → หา IP คนที่ต่ออยู่จาก `ss` แทน
+- bc ไม่ได้ติดตั้ง ใช้ awk คำนวณแทน
+- grep -q ใน pipeline ที่มี pipefail → SIGPIPE ทำให้ fail
+  → เก็บ output ลงตัวแปรก่อนค่อย grep
+
+Firewall
+- rollback แบบ "sleep 300 && iptables -F" อันตราย: ลบแค่กฎ policy DROP
+  ยังอยู่ → ล็อกตัวเอง ต้องตั้ง policy ACCEPT ก่อน
+- ต้องมี ipset-persistent ไม่งั้นหลัง reboot กฎอ้าง set ที่ไม่มี → โหลดไม่ขึ้น
+- URL ipdeny aggregated/all-zones.tar.gz ไม่มีจริง → ใช้ countries/all-zones.tar.gz
+- เซิร์ฟเวอร์ curl หา public IP ตัวเองไม่ได้ (วนออกแล้วกลับมาด้วย IP Azure
+  → โดน geo-block) → ทดสอบด้วย curl --resolve freexduk.duckdns.org:443:127.0.0.1
+- Docker ปกติเขียนกฎ iptables เอง → ตั้ง "iptables": false ใน daemon.json แล้ว
+  ห้ามเปลี่ยนกลับ
+
+Nginx
+- log_format ต้องประกาศก่อน access_log ที่อ้างถึง (unknown log format)
+  → ใส่ access_log ใน conf.d หลัง log_format; รัน nginx -t ทุกครั้งก่อน reload
+- ลำดับ location: กฎ deny PHP ใน uploads ต้องมาก่อน location ~ \.php$
+- อย่าบล็อก /wp-json/wp/v2/users ที่ nginx (nginx ไม่รู้ว่าใคร login →
+  editor ของทีมพัง) → ใช้ mu-plugin แทน
+- client_max_body_size ค่าเริ่มต้น 1m → ตั้ง 32m แล้ว (ทั้งหน้าบ้านและ origin)
+
+WordPress
+- WP-Cron ต้องมี /etc/hosts 127.0.0.1 freexduk.duckdns.org
+  ตรวจด้วย: sudo -u www-data wp cron test
+- Cache Enabler ต้องมี WP_CACHE true และ cache เฉพาะ request ที่มี
+  Accept: text/html → ทดสอบด้วย curl -H 'Accept: text/html'
+- WP-CLI: --include ไม่ทำงานกับ post list → ใช้ --post__in
+- หน้าหลักสูตรใช้ anchor ในหน้าเดียว อย่ารายงานว่า "หน้าหาย"
+
+logwatch / Docker
+- อย่า mount โฟลเดอร์ซ้อนในโฟลเดอร์ที่ mount แบบ read-only
+  → dashboard ใช้ /data แยก + alias ใน nginx
+- API 400 "key not scoped to workspace" → ต้องใช้ key ที่สร้างใน workspace
+
+เครื่อง Windows (local)
+- PowerShell 5.1: ไฟล์ .ps1 ที่มีภาษาไทยต้องบันทึกเป็น UTF-8 with BOM
+- PowerShell 5.1 ตัด quote ของ argument ที่ส่งให้ native exe → ใช้ Git Bash
+
+
+----------------------------------------------------------------------
+11. คำสั่งตรวจสุขภาพระบบแบบเร็ว (อ่านอย่างเดียว ไม่แก้อะไร)
+----------------------------------------------------------------------
+systemctl is-active nginx php8.3-fpm mysql fail2ban docker netfilter-persistent
+sudo nginx -t
+sudo sshd -T | grep -E 'permitrootlogin|passwordauthentication|authenticationmethods|allowusers'
+sudo ipset list th-net -t ; sudo ipset list th-net6 -t
+sudo iptables -L INPUT -n --line-numbers | head -20
+sudo fail2ban-client status
+systemctl list-timers logwatch.timer
+cd /var/www/freexduk && sudo -u www-data wp cron test
+curl -sI --resolve freexduk.duckdns.org:443:127.0.0.1 https://freexduk.duckdns.org/ \
+  -H 'Accept: text/html' | grep -iE '^HTTP|x-cache-status'
+sudo /root/.acme.sh/acme.sh --list   # ดูวันหมดอายุใบรับรอง
+free -h ; df -h /
+
+======================================================================
+ จบเอกสาร — ถ้าเพิ่มงานใหม่ ให้จดใน runbook.md และอัปเดตข้อ 9 ของไฟล์นี้
+======================================================================

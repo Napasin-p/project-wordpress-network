@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Security Dashboard</title>
+<link rel="stylesheet" href="style.css">
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="viz-root">
+  <header class="top">
+    <div>
+      <h1>Security Dashboard</h1>
+      <p class="sub" id="meta">กำลังโหลด…</p>
+    </div>
+    <div class="controls">
+      <label class="toggle"><input type="checkbox" id="mask" checked> ซ่อน IP บางส่วน</label>
+      <button type="button" id="reload">โหลดใหม่</button>
+    </div>
+  </header>
+
+  <p class="error" id="error" hidden></p>
+
+  <!-- ไฟสถานะ + ตัวเลขหลัก -->
+  <section class="tiles" id="tiles" aria-label="สรุปตัวเลข"></section>
+
+  <!-- ผลวิเคราะห์ของ AI -->
+  <section class="card" aria-labelledby="ai-h">
+    <div class="card-head">
+      <h2 id="ai-h">ผลวิเคราะห์ของ AI</h2>
+      <span class="muted small" id="ai-meta"></span>
+    </div>
+    <p id="ai-summary" class="lead"></p>
+    <h3>เหตุการณ์ที่ตรวจพบ</h3>
+    <div id="incidents"></div>
+    <div class="two">
+      <div>
+        <h3>IP ที่ควรตรวจสอบ <span class="muted small">(AI เสนอเท่านั้น — ระบบไม่แบนอัตโนมัติ)</span></h3>
+        <ul id="review" class="plain"></ul>
+      </div>
+      <div>
+        <h3>การป้องกันที่ทำงานอยู่</h3>
+        <ul id="defenses" class="checks"></ul>
+      </div>
+    </div>
+    <p class="muted small" id="ai-notes"></p>
+  </section>
+
+  <!-- กราฟ 24 ชม. (แยกกราฟละหนึ่งชุดข้อมูล — ไม่ใช้สองแกน) -->
+  <section class="grid2">
+    <figure class="card chart" id="c-geo">
+      <figcaption><h2>การบล็อก IP ต่างประเทศ รายชั่วโมง</h2><p class="muted small">GEOBLOCK-DROP จาก iptables · 24 ชม.ล่าสุด · log จำกัด 10 บรรทัด/นาที</p></figcaption>
+    </figure>
+    <figure class="card chart" id="c-req">
+      <figcaption><h2>Requests ที่เข้าถึงเว็บ รายชั่วโมง</h2><p class="muted small">ผ่าน geo-block แล้ว (IP ไทยเท่านั้น) · 24 ชม.ล่าสุด</p></figcaption>
+    </figure>
+  </section>
+
+  <section class="grid2">
+    <figure class="card chart" id="c-country">
+      <figcaption><h2>ประเทศต้นทางที่ถูกบล็อก</h2><p class="muted small">ช่วงวิเคราะห์ล่าสุด · 10 อันดับแรก</p></figcaption>
+    </figure>
+    <section class="card">
+      <h2>รูปแบบการโจมตีที่พบใน request</h2>
+      <p class="muted small">ตรวจจาก path/query ของ request ที่ผ่าน geo-block มาแล้ว</p>
+      <div id="attacks"></div>
+    </section>
+  </section>
+
+  <section class="grid2">
+    <section class="card">
+      <h2>IP ที่ใช้งานเว็บมากที่สุด</h2>
+      <div id="top-ips"></div>
+    </section>
+    <section class="card">
+      <h2>SSH · fail2ban · WordPress login</h2>
+      <div id="auth"></div>
+    </section>
+  </section>
+
+  <section class="grid2">
+    <section class="card">
+      <h2>สถานะระบบ</h2>
+      <div id="system"></div>
+    </section>
+    <section class="card">
+      <h2>ประวัติการสแกน</h2>
+      <div id="history"></div>
+    </section>
+  </section>
+
+  <footer class="muted small">
+    ข้อมูลจาก <code>logwatch</code> (container) · วิเคราะห์ด้วย Claude API ทุก 6 ชั่วโมง ·
+    ข้อความจาก log แสดงเป็นตัวอักษรเท่านั้น (กันการฝังสคริปต์)
+  </footer>
+</div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+</body>
+</html>

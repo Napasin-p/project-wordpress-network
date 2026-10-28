@@ -1,0 +1,39 @@
+# logwatch — AI สแกน log + dashboard (Stage 2 Phase 1)
+# Docker ตั้ง "iptables": false → ใช้ network_mode: host และ dashboard ฟังแค่ 127.0.0.1
+name: logwatch
+
+services:
+  # ---------- ตัววิเคราะห์: รันเป็นรอบ ๆ ผ่าน systemd timer (ไม่รันค้าง) ----------
+  analyzer:
+    build:
+      context: .
+      network: host          # ไม่มี bridge → build ต้องใช้ network ของ host เพื่อโหลด pip
+    image: logwatch-analyzer:latest
+    profiles: ["job"]
+    network_mode: host       # ต้องออกเน็ตไปหา api.anthropic.com
+    user: "65534:65534"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    env_file: /etc/logwatch.env          # ANTHROPIC_API_KEY, CLAUDE_MODEL (สิทธิ 600 root)
+    environment:
+      WINDOW_HOURS: "6"
+    volumes:
+      - /var/lib/logwatch/in:/in:ro      # log ที่ prepare.sh เตรียมให้ (อ่านอย่างเดียว)
+      - /var/lib/logwatch/geo:/geo:ro    # ช่วง IP รายประเทศ
+      - /var/lib/logwatch/out:/out       # ผลลัพธ์ JSON
+
+  # ---------- dashboard: เว็บ static อ่าน JSON (ไม่มีโค้ดฝั่ง server) ----------
+  dashboard:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    network_mode: host
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    volumes:
+      - ./dashboard:/usr/share/nginx/html:ro
+      - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /var/lib/logwatch/out:/data:ro              # ผลลัพธ์ (mount แยก — ซ้อนใน html ที่ read-only ไม่ได้)

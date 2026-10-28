@@ -1,0 +1,67 @@
+# ===== ความลับ — ห้ามขึ้น repo เด็ดขาด =====
+# ค่าตั้งค่าจริง: token DuckDNS, รหัส database, Claude API key
+config.env
+*.env
+.env*
+!config.env.example
+# รหัสผ่าน Security Dashboard (htpasswd)
+.htpasswd*
+*.htpasswd
+
+# กุญแจและใบรับรอง
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.ppk
+*.pub
+known_hosts
+authorized_keys
+
+# รายงานที่สร้างจากสคริปต์ 99 (มี public IP และ log จริง)
+report*.md
+evidence*.md
+
+# log และผลวิเคราะห์ของ logwatch (มี IP ของผู้ใช้จริง — ข้อมูลส่วนบุคคล/PDPA)
+*.log
+latest.json
+history.json
+usage.json
+logwatch/in/
+logwatch/geo/
+logwatch/out/
+logwatch/data/
+
+# ไฟล์สำรอง: database, wp-content, firewall, config
+backups/
+firewall-backup/
+*.sql
+*.sql.gz
+*.tar.gz
+*.zip
+*.bak
+*.bak.*
+
+# รายงาน / สรุปงาน / สไลด์ (มีชื่อ-รหัสนิสิต) — ไม่ขึ้น repo
+*.docx
+*.pdf
+*.pptx
+~$*
+
+# ขยะของ OS / editor / เครื่องมือ
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
+.vscode/
+node_modules/
+__pycache__/
+*.pyc
+
+# การตั้งค่าเครื่องมือในเครื่อง (ไม่เกี่ยวกับโปรเจกต์)
+.claude/
