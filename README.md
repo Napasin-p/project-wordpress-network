@@ -1,82 +1,104 @@
-# โปรเจคกลุ่ม: WordPress บน VPS (ปลอดภัย + จำกัดเฉพาะไทย)
+# WordPress บน VPS แบบปลอดภัย (เข้าได้เฉพาะจากไทย)
 
-ชุดสคริปต์และเอกสารสำหรับงานกลุ่มวิชาเครือข่าย/ระบบปฏิบัติการ
-ส่ง **สัปดาห์สุดท้ายของเดือนตุลาคม 2026** · กลุ่ม **6-8 คน**
+โปรเจคกลุ่มวิชาเครือข่าย ม.บูรพา: เว็บแนะนำหลักสูตรวิทยาการคอมพิวเตอร์ บน VPS ที่ติดตั้งและป้องกันเองทั้งหมดด้วยสคริปต์
+
+- เว็บ: https://freexduk.duckdns.org
+- Security Dashboard: https://freexduk.duckdns.org/security-dashboard/ (มีรหัสผ่าน)
+- บันทึกคำสั่งและผลลัพธ์จริงทุกขั้น: [runbook.md](runbook.md)
+
+| | สถานะ |
+|---|---|
+| Stage 1 · ด่าน 1: HTTPS + SSH แบบ key เท่านั้น | ✅ |
+| Stage 1 · ด่าน 2: Firewall รับเฉพาะ IP ไทย | ✅ |
+| Stage 1 · ด่าน 3: เว็บแนะนำหลักสูตร | ✅ |
+| Stage 2: Reverse proxy + AI วิเคราะห์ log + Dashboard + แจ้งเตือน Discord | ✅ |
 
 ---
 
-## โจทย์ที่ต้องทำ (สรุปจาก lecture note)
+## สถาปัตยกรรม
 
-| ด่าน | สิ่งที่ต้องส่ง | สคริปต์/เอกสารที่เกี่ยวข้อง |
+```
+ผู้ใช้ในไทย ──443──► Azure NSG ─► iptables + ipset (รับเฉพาะ IP ไทย · fail2ban · จำกัด SSH)
+                                   │
+                                   ▼
+                    Nginx หน้าบ้าน  TLS · rate limit · micro-cache · CSP แบบ hash
+                       ├─► 127.0.0.1:8080  Nginx origin + PHP-FPM 8.3 + MySQL 8 (WordPress)
+                       └─► 127.0.0.1:8081  /security-dashboard/ (container, Basic Auth)
+
+logwatch.timer  ทุก 6 ชม.  ─► สรุป log ─► Claude วิเคราะห์ ─► Dashboard
+alert-check     ทุก 5 นาที ─► ตรวจเว็บ/บริการ/firewall/ใบรับรอง/ดิสก์ ─► Discord
+```
+
+VPS: Azure for Students · Ubuntu 24.04 LTS · Standard_B2als_v2 (2 vCPU, 4 GiB) · Malaysia West
+ดู version ของทุกโปรแกรมด้วย `sudo ./scripts/99-collect-evidence.sh`
+
+---
+
+## สคริปต์ (รันตามลำดับ อย่าสลับขั้น)
+
+| ลำดับ | สคริปต์ | ทำอะไร |
 |---|---|---|
-| **1** | เข้าเว็บผ่าน `https://<ชื่อ>.duckdns.org` ชี้มาที่ VPS ที่ลง WordPress | `scripts/02` – `scripts/05` |
-| **1** | SSH: **ปิด root login**, **ปิด password auth**, **เปิด PKI เท่านั้น** | `scripts/00`, `scripts/01` |
-| **1** | แสดงสถาปัตยกรรม + **version ของ nginx / PHP / WordPress / MySQL** | `docs/01-architecture.md`, `scripts/99` |
-| **2** | Firewall บล็อกการเชื่อมต่อจากต่างประเทศ (เข้าได้เฉพาะจากไทย) | `scripts/06`, `docs/03-firewall-geoblock.md` |
-| **3** | เว็บ WordPress แนะนำหลักสูตรวิทยาการคอมพิวเตอร์ ให้ดูสวยงาม | `docs/04-wordpress-content.md` |
-| **Stage 2** | reverse proxy / Cloudflare cache / AI scan log → dashboard | `docs/05-stage2-roadmap.md` |
+| 1 | `00a-update-swap.sh` | อัปเดตระบบ + swap 2 GB |
+| 2 | `00b-create-admin-user.sh` | user ธรรมดา + sudo + public key (**ทดสอบ ssh ด้วย key ให้ผ่านก่อนไปขั้นต่อไป**) |
+| 3 | `01-harden-ssh.sh` | ปิด root login / ปิด password / ใช้ key เท่านั้น |
+| 4 | `04-duckdns.sh` | ให้โดเมนชี้มาที่ VPS + อัปเดตทุก 5 นาที |
+| 5 | `02-install-lemp.sh` | Nginx + PHP-FPM + MySQL 8 |
+| 6 | `03-install-wordpress.sh` | WordPress + database + vhost |
+| 7 | `05-https-acme.sh` | ใบรับรอง Let's Encrypt (acme.sh แบบ DNS-01) ต่ออายุอัตโนมัติ |
+| 8 | `06-firewall-th-only.sh` | iptables + ipset เฉพาะไทย (IPv4+IPv6) มี auto-rollback 5 นาที |
+| 9 | `07-fail2ban.sh` | บล็อกคนเดารหัส SSH / WordPress และ bot สแกน |
+| 10 | `08-site-content.sh` | theme Kadence + plugin + หน้าเว็บ + เมนู (WP-CLI) |
+| 11 | `09-logwatch.sh` | AI วิเคราะห์ log ทุก 6 ชม. + Dashboard (Docker) |
+| 12 | `10-reverse-proxy.sh` | Nginx หน้าบ้าน: rate limit, micro-cache, security headers |
+| 13 | `11-csp-strict.sh` | Content-Security-Policy แบบ hash (`--enforce` เพื่อบังคับใช้) |
+| 14 | `12-alerts.sh` | แจ้งเตือนเข้า Discord ทุก 5 นาที |
+| 15 | `13-site-identity.sh` | ชื่อแท็บ "ComSci Burapha" + ไอคอนตรามหาวิทยาลัย |
+| — | `99-collect-evidence.sh` | ออกรายงาน version + สถานะทั้งหมด |
 
----
-
-## ลำดับการทำงาน (สำคัญ — อย่าสลับขั้น)
-
-```
-[เครื่องตัวเอง]  สร้าง SSH key pair                → client/keygen-windows.md
-       │
-[VPS]  00a อัปเดตระบบ + สร้าง swap 2 GB
-       │
-[VPS]  00b สร้าง user ธรรมดา + ให้สิทธิ sudo + วาง public key
-       │   ← ต้องทดสอบ ssh ด้วย key ให้ได้ก่อน ห้ามข้าม!
-       ▼
-[VPS]  01  ปิด root login / ปิด password auth / เปิด PKI
-       ▼
-[VPS]  04  ตั้ง DuckDNS ให้โดเมนชี้มาที่ public IP ของ VPS
-       ▼
-[VPS]  02  ติดตั้ง nginx + PHP-FPM + MySQL 8
-       ▼
-[VPS]  03  ติดตั้ง WordPress + สร้าง database
-       ▼
-[VPS]  05  ขอใบรับรอง HTTPS (Let's Encrypt, acme.sh DNS-01)
-       ▼
-[VPS]  06  ติดตั้ง firewall จำกัดเฉพาะ IP ประเทศไทย
-       ▼
-[VPS]  07  fail2ban
-       ▼
-[VPS]  08  ทำเว็บ: theme + plugin + หน้าเว็บ + เมนู
-       ▼
-[VPS]  99  เก็บหลักฐาน version + สถานะทั้งหมดเป็นรายงาน
-```
-
-> **ทำไม firewall ต้องท้ายสุด?** เพราะขั้น 05 ต้องคุยกับเซิร์ฟเวอร์ของ
-> Let's Encrypt / DuckDNS / ipdeny ซึ่งอยู่ต่างประเทศ (ขาออกไม่โดน block แต่ทำก่อนจะ debug ง่ายกว่า)
-> (รายละเอียดและวิธีให้ auto-renew ทำงานได้หลัง block อยู่ใน `docs/03`)
+> **ทำไม firewall มาทีหลัง HTTPS?** ขั้นขอใบรับรองต้องคุยกับ Let's Encrypt / DuckDNS ที่อยู่ต่างประเทศ
+> (ขาออกไม่โดนบล็อก แต่ทำก่อนจะ debug ง่ายกว่า)
+>
+> ⚠️ สคริปต์ที่แตะ SSH หรือ firewall (`01`, `06`) ต้องเปิดหน้าต่าง ssh สำรองค้างไว้ก่อนรันเสมอ
 
 ---
 
 ## วิธีเริ่ม
 
-### 1. เตรียม config
+### 1. สร้าง SSH key บนเครื่องตัวเอง (ทุกคนที่ต้องเข้า VPS)
+```powershell
+ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\id_ed25519_vps   # ควรตั้ง passphrase
+Get-Content $env:USERPROFILE\.ssh\id_ed25519_vps.pub            # public key → ใส่ใน config.env
+```
+private key (`id_ed25519_vps` ไม่มี .pub) ห้ามส่งให้ใครและห้ามขึ้น git
+
+### 2. เตรียม config
 ```bash
 cp config.env.example config.env
-nano config.env          # กรอก subdomain, token, รหัส database, อีเมล
-chmod 600 config.env     # ไฟล์นี้มีความลับ อย่า commit ขึ้น git
+nano config.env          # subdomain, token DuckDNS, รหัส database, อีเมล, public key
+chmod 600 config.env
 ```
 
-### 2. อัปโหลดโฟลเดอร์นี้ขึ้น VPS
+### 3. อัปโหลดขึ้น VPS แล้วรันทีละขั้น
 ```bash
-# จากเครื่องตัวเอง (Windows PowerShell / Git Bash)
-scp -r -i ~/.ssh/id_ed25519 wordpress-vps-project <user>@<vps-ip>:~/
+scp -r wordpress-vps-project <user>@<vps-ip>:~/
+ssh <user>@<vps-ip>
+cd ~/wordpress-vps-project && chmod -R go-rwx . && chmod +x scripts/*.sh
+sudo ./scripts/00a-update-swap.sh
 ```
+> แก้ไฟล์บน Windows แล้วรันไม่ได้ (`bad interpreter: ^M`) → `sed -i 's/\r$//' scripts/*.sh scripts/lib/*.sh`
 
-### 3. รันทีละขั้น
-```bash
-cd ~/wordpress-vps-project/scripts
-sudo ./02-install-lemp.sh
-```
+---
 
-> **หมายเหตุสำหรับคนทำบน Windows:** ไฟล์ `.sh` ที่แก้ด้วย Notepad อาจติด
-> CRLF แล้วรันบน Linux ไม่ได้ (error `bad interpreter: ^M`) แก้ด้วย
-> `sed -i 's/\r$//' scripts/*.sh scripts/lib/*.sh`
+## ความลับ (ไม่อยู่ใน repo)
+
+| อะไร | อยู่ที่ |
+|---|---|
+| token DuckDNS · รหัส database · Claude API key | `config.env` (เครื่องเรา) · `/etc/duckdns.env` · `/etc/logwatch.env` (VPS, สิทธิ์ 600) |
+| Discord webhook | `/etc/alert.env` (VPS, สิทธิ์ 600) |
+| รหัสผ่าน Dashboard | `.htpasswd` บน VPS |
+
+`.gitignore` กันไฟล์เหล่านี้ไว้แล้ว รวมถึง log และผลวิเคราะห์ของ AI (มี IP ของผู้ใช้จริง)
+ถ้าเผลอ commit ความลับ ให้เปลี่ยนค่านั้นใหม่ทันที (ลบ commit อย่างเดียวไม่พอ)
 
 ---
 
@@ -84,31 +106,20 @@ sudo ./02-install-lemp.sh
 
 ```
 wordpress-vps-project/
-├── config.env.example          ตัวแปรทั้งหมดของโปรเจค (คัดลอกเป็น config.env)
-├── client/
-│   └── keygen-windows.md       วิธีสร้าง SSH key บน Windows
+├── README.md                 ไฟล์นี้
+├── runbook.md                คำสั่ง + ผลลัพธ์จริงทุกขั้น และปัญหาที่เจอ
+├── config.env.example        ตัวแปรทั้งหมด (คัดลอกเป็น config.env)
 ├── scripts/
-│   ├── lib/common.sh           ฟังก์ชันร่วม (log, require_root, โหลด config)
-│   ├── 00a-update-swap.sh      อัปเดตระบบ + swap 2 GB
-│   ├── 00b-create-admin-user.sh สร้าง user + sudo + authorized_keys
-│   ├── 01-harden-ssh.sh        ปิด root/password, เปิด PKI
-│   ├── 02-install-lemp.sh      nginx + PHP-FPM + MySQL 8
-│   ├── 03-install-wordpress.sh WordPress + database + nginx vhost
-│   ├── 04-duckdns.sh           อัปเดต DNS + cron ทุก 5 นาที
-│   ├── 05-https-acme.sh        Let's Encrypt ด้วย acme.sh แบบ DNS-01
-│   ├── 06-firewall-th-only.sh  iptables + ipset เฉพาะไทย (IPv4+IPv6) + auto-rollback
-│   ├── 07-fail2ban.sh          fail2ban: sshd + WordPress login + bot scan
-│   ├── 08-site-content.sh      ด่าน 3: theme + plugin + 8 หน้า + เมนู (WP-CLI)
-│   └── 99-collect-evidence.sh  ออกรายงาน version + สถานะ
-├── site/
-│   ├── pages/*.html            เนื้อหา 8 หน้า (Gutenberg block markup)
-│   └── posts/*.html            ข่าวตัวอย่าง
-├── runbook.md                  บันทึกคำสั่ง + ผลลัพธ์จริงทุกขั้น (ใช้ทำรายงาน)
-└── docs/
-    ├── 01-architecture.md      แผนภาพสถาปัตยกรรม + ตาราง version
-    ├── 02-checkpoint-ssh.md    หลักฐานด่าน 1 (SSH hardening)
-    ├── 03-firewall-geoblock.md ด่าน 2 (อธิบายหลักการ + ข้อจำกัด)
-    ├── 04-wordpress-content.md ด่าน 3 (โครงเว็บ + theme/plugin)
-    ├── 05-stage2-roadmap.md    Stage 2
-    └── division-of-work.md     แบ่งงาน 6-8 คน
+│   ├── lib/common.sh         ฟังก์ชันร่วม (log, require_root, โหลด config)
+│   └── 00a … 13, 99          สคริปต์ตามตารางข้างบน
+├── logwatch/                 Stage 2: AI วิเคราะห์ log
+│   ├── logwatch.py           สรุป log + เรียก Claude
+│   ├── prepare.sh            ดึง log จาก nginx / journald
+│   ├── Dockerfile, docker-compose.yml
+│   ├── systemd/              logwatch.service + timer ทุก 6 ชม.
+│   └── dashboard/            หน้า Security Dashboard (HTML/CSS/JS + nginx.conf)
+└── site/
+    ├── pages/*.html          เนื้อหาหน้าเว็บ (Gutenberg block markup)
+    ├── posts/*.html          ข่าวตัวอย่าง
+    └── assets/               ไอคอนเว็บ (ตรามหาวิทยาลัย)
 ```

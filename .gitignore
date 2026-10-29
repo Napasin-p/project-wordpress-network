@@ -65,3 +65,20 @@ __pycache__/
 
 # การตั้งค่าเครื่องมือในเครื่อง (ไม่เกี่ยวกับโปรเจกต์)
 .claude/
+
+# ไฟล์ชั่วคราวของ LaTeX
+*.aux
+*.toc
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
+# ===== เอกสาร: ขึ้น repo แค่ README.md กับ runbook.md =====
+# (รายงาน สไลด์ ไฟล์ส่งต่องาน แผนภาพ และ runbook ฉบับ LaTeX เก็บไว้ในเครื่อง/ส่งกันในกลุ่ม)
+docs/
+client/
+*.txt
+*.md
+!README.md
+!runbook.md

@@ -39,7 +39,7 @@ log "ตั้งค่าทั่วไป (timezone, permalink, คำโป�
 WP option update timezone_string 'Asia/Bangkok' >/dev/null
 WP option update date_format 'j F Y' >/dev/null
 WP option update start_of_week 1 >/dev/null
-WP option update blogdescription 'เรียนรู้ สร้างสรรค์ เปลี่ยนโลกด้วยโค้ด' >/dev/null
+WP option update blogdescription '' >/dev/null   # ไม่ใส่คำโปรย → แท็บหน้าแรกขึ้นแค่ "ComSci Burapha" (ไอคอนแท็บ: 13-site-identity.sh)
 WP rewrite structure '/%postname%/' >/dev/null      # URL สวย: /curriculum/ แทน /?page_id=12
 WP option update default_comment_status closed >/dev/null   # เว็บหลักสูตรไม่ต้องเปิดคอมเมนต์ (ลดสแปม)
 ok "ตั้งค่าทั่วไปแล้ว"

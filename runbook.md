@@ -860,6 +860,22 @@ sudo alert-check --test
 ```
 ปิด: `sudo systemctl disable --now alert-check.timer`
 
+### 2.10 ชื่อบนแท็บ + ไอคอนเว็บ (29 ต.ค.) — `scripts/13-site-identity.sh`
+แท็บหน้าแรกเดิมขึ้น "ComSci Burapha – เรียนรู้ สร้างสรรค์ เปลี่ยนโลกด้วยโค้ด" และไม่มีไอคอน (`/favicon.ico` → 404)
+ไอคอน: ตรามหาวิทยาลัยบูรพา สีทอง `cropped-logo-if-1.png` (512×512 พื้นโปร่งใส) จากเว็บคณะวิทยาการสารสนเทศ → `site/assets/buu-seal-512.png`
+```bash
+scp site/assets/buu-seal-512.png wp-vps:~/wordpress-vps-project/site/assets/
+scp scripts/13-site-identity.sh wp-vps:~/wordpress-vps-project/scripts/
+sudo ./13-site-identity.sh
+# ภายใน: wp option update blogname 'ComSci Burapha' · wp option update blogdescription ''
+#        wp media import buu-seal-512.png · wp option update site_icon <ID> · wp cache-enabler clear
+curl -s https://<SUBDOMAIN>.duckdns.org/ | grep -oiE '<title>[^<]*</title>|<link rel="icon"[^>]*>'
+```
+**ผลลัพธ์:** ✅ `<title>ComSci Burapha</title>` · หน้าอื่นเป็น "ชื่อหน้า – ComSci Burapha" · `<link rel="icon">` 32×32 และ 192×192 ตอบ 200 · CSP ไม่ต้องแก้ (เป็นรูปจาก `'self'`)
+🐞 รอบแรกสคริปต์หารูปเดิมจาก slug ไม่เจอ (slug มาจากชื่อภาษาไทย) → import ซ้ำ · แก้ให้หาจากชื่อรูปแทน
+เปลี่ยนจากโลโก้ตัวอักษร BUU (attachment 201, 202) เป็นตราสีทอง (attachment 203) ตามที่กลุ่มเลือก · รูป 201/202 ไม่ได้ใช้แล้ว ลบได้ใน Media
+หลังเปลี่ยนไอคอน บางหน้ายังขึ้นรูปเก่าจาก micro-cache ของ nginx ไม่กี่วินาที → เปิดหน้าซ้ำแล้วหายเอง (ตรวจครบ 8 หน้า)
+
 ---
 
 ## บันทึกปัญหาที่เจอ
