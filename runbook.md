@@ -876,6 +876,21 @@ curl -s https://<SUBDOMAIN>.duckdns.org/ | grep -oiE '<title>[^<]*</title>|<link
 เปลี่ยนจากโลโก้ตัวอักษร BUU (attachment 201, 202) เป็นตราสีทอง (attachment 203) ตามที่กลุ่มเลือก · รูป 201/202 ไม่ได้ใช้แล้ว ลบได้ใน Media
 หลังเปลี่ยนไอคอน บางหน้ายังขึ้นรูปเก่าจาก micro-cache ของ nginx ไม่กี่วินาที → เปิดหน้าซ้ำแล้วหายเอง (ตรวจครบ 8 หน้า)
 
+### 2.11 Dashboard ดีไซน์ใหม่จากทีมออกแบบ (29 ต.ค.)
+ทีมส่ง `dashboard-site.zip` (index.html · app.js · style.css) — ใช้ข้อมูลชุดเดิม (`data/latest.json`, `history.json`, `usage.json`) ไม่แก้ `nginx.conf`/CSP
+ตรวจโค้ดก่อนขึ้น: สร้าง DOM ด้วย `textContent`/`createElement` เท่านั้น (ไม่มี `innerHTML`/`eval`) · ไม่มีสคริปต์จากที่อื่น · ลิงก์ภายนอกมีแค่ Google Fonts (CSP อนุญาตอยู่แล้ว)
+แก้เพิ่ม 1 จุด: สวิตช์ "ซ่อน IP บางส่วน" เดิมไม่ซ่อน IP ที่ปนอยู่ในข้อความของ AI (สรุป · หลักฐาน · หมายเหตุ) → เพิ่ม `maskText()` ใน `app.js`
+ทดสอบในเครื่องด้วยข้อมูลจริง + CSP เดียวกับ container: ไม่มี console error · ฟอนต์โหลดได้ · เปิดสวิตช์แล้วเหลือ IP เต็ม 0 จุด (ปิดสวิตช์เห็น 4 จุด)
+```bash
+sudo install -d -m 700 /root/dashboard-backup-20261029-2326
+sudo cp -a /opt/logwatch/dashboard/. /root/dashboard-backup-20261029-2326/
+scp logwatch/dashboard/{index.html,app.js,style.css} wp-vps:dash-new/
+sudo install -m 644 ~/dash-new/{index.html,app.js,style.css} /opt/logwatch/dashboard/
+cd /opt/logwatch && sudo docker compose up -d --force-recreate dashboard
+```
+**ผลลัพธ์:** ✅ `/` `/app.js` `/style.css` `/data/latest.json` → 200 · sha256 บนเครื่องจริงตรงกับไฟล์ใน repo · เปิดจากนอกโดยไม่ใส่รหัส → 401 · เว็บหลัก 200 · CSP เหมือนเดิม
+กู้คืน: `sudo cp -a /root/dashboard-backup-20261029-2326/. /opt/logwatch/dashboard/ && cd /opt/logwatch && sudo docker compose up -d --force-recreate dashboard`
+
 ---
 
 ## บันทึกปัญหาที่เจอ
