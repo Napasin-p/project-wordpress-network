@@ -74,11 +74,14 @@ __pycache__/
 *.fdb_latexmk
 *.synctex.gz
 
-# ===== เอกสาร: ขึ้น repo แค่ README.md กับ runbook.md =====
+# ===== เอกสาร: ขึ้น repo แค่ README.md, runbook.md และ 3 ไฟล์ใน docs/ ที่รายงานอ้างถึง (ตารางที่ 25) =====
 # (รายงาน สไลด์ ไฟล์ส่งต่องาน แผนภาพ และ runbook ฉบับ LaTeX เก็บไว้ในเครื่อง/ส่งกันในกลุ่ม)
-docs/
+docs/*
 client/
 *.txt
 *.md
 !README.md
 !runbook.md
+!docs/01-architecture.md
+!docs/06-stage2-plan.md
+!docs/stage2-perf-after-phase2.txt

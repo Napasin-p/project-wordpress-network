@@ -109,6 +109,10 @@ wordpress-vps-project/
 ├── README.md                 ไฟล์นี้
 ├── runbook.md                คำสั่ง + ผลลัพธ์จริงทุกขั้น และปัญหาที่เจอ
 ├── config.env.example        ตัวแปรทั้งหมด (คัดลอกเป็น config.env)
+├── docs/                     เอกสารประกอบที่รายงานอ้างถึง (ตารางที่ 25)
+│   ├── 01-architecture.md    แผนภาพสถาปัตยกรรม
+│   ├── 06-stage2-plan.md     แผน Stage 2 และแบบ Cloudflare
+│   └── stage2-perf-after-phase2.txt  ผลวัดประสิทธิภาพหลังทำ reverse proxy
 ├── scripts/
 │   ├── lib/common.sh         ฟังก์ชันร่วม (log, require_root, โหลด config)
 │   └── 00a … 13, 99          สคริปต์ตามตารางข้างบน
@@ -123,3 +127,6 @@ wordpress-vps-project/
     ├── posts/*.html          ข่าวตัวอย่าง
     └── assets/               ไอคอนเว็บ (ตรามหาวิทยาลัย)
 ```
+
+`report-stage1-2.md` (หลักฐานจากเครื่องจริงในรายงาน) ไม่ได้เก็บใน repo เพราะมี log จริง
+สร้างใหม่ได้ทุกเมื่อบน VPS ด้วย `sudo ./scripts/99-collect-evidence.sh report-stage1-2.md`
