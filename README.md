@@ -5,6 +5,10 @@
 - เว็บ: https://freexduk.duckdns.org
 - Security Dashboard: https://freexduk.duckdns.org/security-dashboard/ (มีรหัสผ่าน)
 - บันทึกคำสั่งและผลลัพธ์จริงทุกขั้น: [runbook.md](runbook.md)
+- เล่มรายงาน (PDF): [docs/WordPress-VPS-Report.pdf](docs/WordPress-VPS-Report.pdf)
+- Source code: [scripts/](scripts/) (ติดตั้งทั้งระบบ) · [logwatch/](logwatch/) (AI + Dashboard) · [site/](site/) (เนื้อหาเว็บ)
+- Configuration: [config.env.example](config.env.example) · [logwatch/docker-compose.yml](logwatch/docker-compose.yml) · [logwatch/dashboard/nginx.conf](logwatch/dashboard/nginx.conf) · [logwatch/systemd/](logwatch/systemd/)
+  (config ของ nginx / firewall / fail2ban / CSP บนเครื่องจริงถูกสร้างจากสคริปต์ใน `scripts/` เช่น `03`, `06`, `07`, `10`, `11`)
 
 | | สถานะ |
 |---|---|
@@ -109,7 +113,8 @@ wordpress-vps-project/
 ├── README.md                 ไฟล์นี้
 ├── runbook.md                คำสั่ง + ผลลัพธ์จริงทุกขั้น และปัญหาที่เจอ
 ├── config.env.example        ตัวแปรทั้งหมด (คัดลอกเป็น config.env)
-├── docs/                     เอกสารประกอบที่รายงานอ้างถึง (ตารางที่ 25)
+├── docs/                     เล่มรายงาน + เอกสารประกอบที่รายงานอ้างถึง (ตารางที่ 25)
+│   ├── WordPress-VPS-Report.pdf  เล่มรายงานฉบับสมบูรณ์
 │   ├── 01-architecture.md    แผนภาพสถาปัตยกรรม
 │   ├── 06-stage2-plan.md     แผน Stage 2 และแบบ Cloudflare
 │   └── stage2-perf-after-phase2.txt  ผลวัดประสิทธิภาพหลังทำ reverse proxy
